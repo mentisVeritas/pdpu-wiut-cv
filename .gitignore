@@ -13,6 +13,7 @@ samples/*.mp4
 samples/*.MP4
 samples/*.part
 samples/*.mp4*
+samples/_clip*.mp4
 weights/*.pt
 weights/*.onnx
 weights/*.engine

@@ -23,6 +23,20 @@ TRACK_CLASSES = sorted(VEHICLE_COCO | PERSON_COCO)
 _model = None
 
 
+def infer_device() -> str:
+    """Organizers have CUDA; this Mac has MPS. Never force one or the other."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "0"
+        if torch.backends.mps.is_available():
+            return "mps"
+    except ImportError:
+        pass
+    return "cpu"
+
+
 def set_seeds(seed: int = SEED) -> None:
     random.seed(seed)
     np.random.seed(seed)

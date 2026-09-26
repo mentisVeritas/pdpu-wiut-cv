@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .config import DETECT_STRIDE
-from .model import TRACK_CLASSES, VEHICLE_COCO, get_model, reset_tracker
+from .model import TRACK_CLASSES, VEHICLE_COCO, get_model, infer_device, reset_tracker
 
 
 @dataclass
@@ -81,6 +81,7 @@ def extract_tracks(video_path: str, stride: int = DETECT_STRIDE) -> tuple[dict[i
         imgsz=640,
         conf=0.25,
         iou=0.5,
+        device=infer_device(),
     )
     frame_idx = 0
     for result in results:

@@ -32,8 +32,16 @@ def point_in_poly(x: float, y: float, poly: list[tuple[float, float]]) -> bool:
 
 
 def scene_polys(scene: dict, width: int, height: int) -> dict:
+    crossings = scene.get("crossings") or []
+    if not crossings and scene.get("crossing"):
+        crossings = [scene["crossing"]]
     return {
         "roadway": _to_px(scene.get("roadway") or [], width, height),
+        "crossings": [_to_px(p, width, height) for p in crossings if p],
         "crossing": _to_px(scene.get("crossing") or [], width, height),
         "stop_line": _to_px(scene.get("stop_line") or [], width, height),
     }
+
+
+def on_any_crossing(x: float, y: float, crossings: list[list[tuple[float, float]]]) -> bool:
+    return any(point_in_poly(x, y, poly) for poly in crossings if len(poly) >= 3)

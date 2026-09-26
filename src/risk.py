@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from .config import RISK_STRIDE, TTC_ALARM_SEC
-from .model import VEHICLE_COCO, get_model
+from .model import VEHICLE_COCO, get_model, infer_device
 
 
 class _SimpleTrack:
@@ -38,7 +38,14 @@ class CausalRiskEstimator:
 
     def _update(self, frame: np.ndarray, t: float) -> None:
         model = get_model()
-        result = model.predict(frame, verbose=False, imgsz=640, conf=0.3, classes=list(VEHICLE_COCO))[0]
+        result = model.predict(
+            frame,
+            verbose=False,
+            imgsz=640,
+            conf=0.3,
+            classes=list(VEHICLE_COCO),
+            device=infer_device(),
+        )[0]
         dets = []
         if result.boxes is not None:
             for box in result.boxes.xyxy.cpu().tolist():

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from .config import STOPPED_SEC, STOPPED_SPEED_PX
-from .geometry import load_scene, point_in_poly, scene_polys
+from .geometry import load_scene, on_any_crossing, point_in_poly, scene_polys
 from .tracks import Track, speed_at, velocity
 
 
@@ -115,7 +115,8 @@ def rule_wrong_way(tracks: dict[int, Track]) -> list[list]:
 def rule_jaywalking(tracks: dict[int, Track], width: int, height: int) -> list[list]:
     scene = load_scene()
     polys = scene_polys(scene, width, height)
-    roadway, crossing = polys["roadway"], polys["crossing"]
+    roadway = polys["roadway"]
+    crossings = polys["crossings"]
     if len(roadway) < 3:
         return []
     events = []
@@ -126,7 +127,7 @@ def rule_jaywalking(tracks: dict[int, Track], width: int, height: int) -> list[l
         mask = []
         for o in tr.obs:
             on_road = point_in_poly(o.cx, o.cy, roadway)
-            on_cross = point_in_poly(o.cx, o.cy, crossing) if len(crossing) >= 3 else False
+            on_cross = on_any_crossing(o.cx, o.cy, crossings)
             mask.append(on_road and not on_cross)
         for start, end in _runs(mask, times):
             if end - start >= 0.8:
