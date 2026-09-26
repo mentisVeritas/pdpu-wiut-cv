@@ -129,9 +129,24 @@ def rule_jaywalking(tracks: dict[int, Track], width: int, height: int) -> list[l
             on_road = point_in_poly(o.cx, o.cy, roadway)
             on_cross = on_any_crossing(o.cx, o.cy, crossings)
             mask.append(on_road and not on_cross)
+        obs_by_t = {o.t: o for o in tr.obs}
         for start, end in _runs(mask, times):
-            if end - start >= 0.8:
-                events.append([start, end, "jaywalking"])
+            if end - start < 0.8:
+                continue
+            # "Pedestrian steps onto / leaves the road" implies walking, not
+            # standing. A loose roadway polygon (sidewalks/medians included)
+            # otherwise reads a stationary group waiting near the curb as
+            # jaywalking for as long as they stand there -- require the
+            # track to actually have covered some ground during the run.
+            run_obs = [obs_by_t[t] for t in times if start <= t <= end]
+            path = sum(
+                float(np.hypot(b.cx - a.cx, b.cy - a.cy))
+                for a, b in zip(run_obs, run_obs[1:])
+            )
+            avg_w = float(np.mean([o.x2 - o.x1 for o in run_obs])) or 1.0
+            if path < 2.5 * avg_w:
+                continue
+            events.append([start, end, "jaywalking"])
     return events
 
 
