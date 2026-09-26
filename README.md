@@ -62,7 +62,7 @@ Classes that need painted geometry (`red_light`, `stop_line`, `illegal_turn`, `s
 | Member | GitHub | Role |
 |---|---|---|
 | Begzad Kenesbaev | [mentisVeritas](https://github.com/mentisVeritas) | Pipeline, repo |
-| Fariza Raxmanova | [farizarakhmanova](https://github.com/farizarakhmanova) | Annotation, EDA |
+| Fariza Raxman | [farizarakhmanova](https://github.com/farizarakhmanova) | Annotation, EDA |
 | mallokodev | [httpswap](https://github.com/httpswap) | Website, demo |
 
 See `TEAM.md` for who does what this weekend.
