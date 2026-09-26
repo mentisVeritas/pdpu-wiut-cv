@@ -155,14 +155,35 @@ def _obs_at(track: Track, t: float):
     return best
 
 
+def _settles(track_ids: set[int], id_to_track: dict[int, Track], after_t: float) -> bool:
+    """Per the class definition, an accident ends when 'all involved objects
+    stop moving or leave the frame'. A close pass where every vehicle keeps
+    driving afterward is ordinary dense traffic, not a crash -- require the
+    post-contact speed to actually drop before calling it an accident."""
+    window = np.arange(after_t, after_t + 1.5, 0.2)
+    for tid in track_ids:
+        tr = id_to_track.get(tid)
+        if tr is None or not tr.obs:
+            continue
+        in_frame = [w for w in window if tr.obs[0].t <= w <= tr.obs[-1].t]
+        if not in_frame:
+            continue  # track ended near the contact -> "leaves the frame"
+        speeds = [speed_at(tr, float(w)) for w in in_frame]
+        if float(np.median(speeds)) > STOPPED_SPEED_PX * 3:
+            return False
+    return True
+
+
 def rule_near_miss_accident(tracks: dict[int, Track], duration: float) -> list[list]:
     vehicles = [tr for tr in tracks.values() if tr.is_vehicle and len(tr.obs) >= 3]
     if len(vehicles) < 2:
         return []
+    id_to_track = {id(tr): tr for tr in vehicles}
     step = 0.2
     ts = np.arange(0.0, duration + 1e-6, step)
     acc_mask = [False] * len(ts)
     miss_mask = [False] * len(ts)
+    acc_ids: list[set[int]] = [set() for _ in ts]
     for i, t in enumerate(ts):
         t = float(t)
         boxes = []
@@ -172,8 +193,8 @@ def rule_near_miss_accident(tracks: dict[int, Track], duration: float) -> list[l
                 boxes.append((tr, o, velocity(tr, t)))
         for j in range(len(boxes)):
             for k in range(j + 1, len(boxes)):
-                _, a, va = boxes[j]
-                _, b, vb = boxes[k]
+                tr_a, a, va = boxes[j]
+                tr_b, b, vb = boxes[k]
                 iou = _iou(a, b)
                 dx, dy = a.cx - b.cx, a.cy - b.cy
                 dist = float(np.hypot(dx, dy))
@@ -182,13 +203,24 @@ def rule_near_miss_accident(tracks: dict[int, Track], duration: float) -> list[l
                 avg_w = 0.5 * ((a.x2 - a.x1) + (b.x2 - b.x1))
                 if iou >= 0.12 or dist < 0.25 * avg_w:
                     acc_mask[i] = True
+                    acc_ids[i] |= {id(tr_a), id(tr_b)}
                 elif dist < 0.9 * avg_w and closing > 12.0:
                     miss_mask[i] = True
     events = []
     times = [float(t) for t in ts]
     for start, end in _runs(acc_mask, times):
-        if end - start >= 0.4:
+        if end - start < 0.4:
+            continue
+        ids_here: set[int] = set()
+        for i, t in enumerate(times):
+            if start <= t <= end:
+                ids_here |= acc_ids[i]
+        if _settles(ids_here, id_to_track, end):
             events.append([start, min(end + 0.4, duration), "accident"])
+        else:
+            for i, t in enumerate(times):
+                if start <= t <= end:
+                    miss_mask[i] = True
     for start, end in _runs(miss_mask, times):
         # drop near-miss that overlaps an accident of the same window
         if any(not (end < s or start > e) for s, e, lab in events if lab == "accident"):
