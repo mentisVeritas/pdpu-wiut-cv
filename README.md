@@ -47,21 +47,31 @@ python run_submission.py --videos /data/test --out predictions.json
 
 Weights total ≤ 5 GB. Time budget: **3 × video duration** for Part A + Part B.
 
-## Approach (draft)
+## Approach
 
-Learned: open-weight detector (YOLO family) + tracker.  
-Rule-based: scene layout (lanes, stop line, crossing) and trajectory rules for the 14 official classes.  
-Part B: causal time-to-collision / kinematics from tracks only (no future frames, no Part A leakage).
+Learned: YOLOv8n (COCO, open weights, AGPL/Ultralytics licence) + ByteTrack.  
+Rule-based: stopped vehicle, congestion, wrong-way vs dominant flow, jaywalking (needs roadway/crossing in `src/scene.json`), near-miss / accident from closing distance.  
+Part B: causal time-to-collision on an online tracker. `step()` never opens the video and never reads Part A.
 
-Public datasets used for any training will be listed here with licences. Seeds will be fixed before the tagged submit commit.
+No extra training data yet. Seed `42` (`src/config.py`).
+
+Classes that need painted geometry (`red_light`, `stop_line`, `illegal_turn`, `solid_line_crossing`, `illegal_u_turn`) are not emitted until `src/scene.json` is filled.
 
 ## Team
 
-| Member | Role |
-|---|---|
-| Kenesbaev Begzad Akilbek Uli | — |
-| TBD | — |
-| TBD | — |
+| Member | GitHub | Role |
+|---|---|---|
+| Begzad Kenesbaev | [mentisVeritas](https://github.com/mentisVeritas) | Pipeline, repo |
+| Fariza Raxmanova | [farizarakhmanova](https://github.com/farizarakhmanova) | Annotation, EDA |
+| mallokodev | [httpswap](https://github.com/httpswap) | Website, demo |
+
+See `TEAM.md` for who does what this weekend.
+
+## Website and demo
+
+- Site (GitHub Pages): https://mentisveritas.github.io/pdpu-wiut-cv/
+- Local site: `python3 -m http.server 8080 --directory website`
+- Model demo: `pip install -r demo/requirements.txt && streamlit run demo/app.py`
 
 ## Docs
 
@@ -69,3 +79,4 @@ Public datasets used for any training will be listed here with licences. Seeds w
 - `docs/WIUT Hackathon _ CV Track Elimination Task.pdf` — official brief
 - `docs/Videos.pdf` — sample video links
 - `docs/starter/README.md` — starter-kit readme
+- `TEAM.md` — who does what

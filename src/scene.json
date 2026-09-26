@@ -1,0 +1,9 @@
+{
+  "comment": "Normalized 0-1 polygons in image coordinates. Fill after watching samples. Empty arrays disable geometry-dependent rules.",
+  "roadway": [[0.0, 0.25], [1.0, 0.25], [1.0, 1.0], [0.0, 1.0]],
+  "crossing": [],
+  "stop_line": [],
+  "solid_lines": [],
+  "no_u_turn": false,
+  "lane_directions": []
+}

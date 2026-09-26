@@ -24,3 +24,5 @@ weights/*.pth
 /report.json
 !examples/predictions.json
 *.log
+my_labels.json
+notebooks/frames/

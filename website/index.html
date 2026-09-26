@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDPU — Traffic events from a fixed camera</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top">PDPU · WIUT 2026</a>
+    <nav>
+      <a href="#team">Team</a>
+      <a href="#approach">Approach</a>
+      <a href="#eda">EDA</a>
+      <a href="#results">Results</a>
+      <a href="#demo">Demo</a>
+      <a href="#report">Report</a>
+      <a href="#links">Links</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="kicker">WIUT Hackathon 2026 · CV elimination · Toyota</p>
+      <h1>Watch one fixed road camera. Report every event. Raise an alarm before the crash.</h1>
+      <p class="lead">
+        Part A returns <code>[start_sec, end_sec, label]</code> for 14 official classes.
+        Part B returns a causal risk score at every frame: P(accident starts within 5 s).
+      </p>
+      <p class="meta">Team <strong>PDPU</strong> · ref <strong>F863582F</strong> · deadline 27 Sep 2026, 23:59 Tashkent</p>
+    </section>
+
+    <section id="team">
+      <h2>Team</h2>
+      <p>Three people, one public repo, one website. Roles below are what each person owns through judging.</p>
+      <div class="cards">
+        <article>
+          <h3>Begzad Kenesbaev</h3>
+          <p class="role">Lead · pipeline, models, submission repo</p>
+          <p>YOLO + ByteTrack, trajectory rules, Part B TTC estimator, harness wiring, reproducibility.</p>
+          <p><a href="https://github.com/mentisVeritas">GitHub</a></p>
+        </article>
+        <article>
+          <h3>Fariza Raxmanova</h3>
+          <p class="role">Data · annotation and EDA</p>
+          <p>Dev labels on sample clips with official start/end conventions, scene polygons, error notes.</p>
+          <p><a href="https://github.com/farizarakhmanova">GitHub</a></p>
+        </article>
+        <article>
+          <h3>mallokodev</h3>
+          <p class="role">Product · website and live demo</p>
+          <p>This site, upload demo, timelines, operator-style presentation of events.</p>
+          <p><a href="https://github.com/httpswap">GitHub</a></p>
+        </article>
+      </div>
+    </section>
+
+    <section id="approach">
+      <h2>Problem and approach</h2>
+      <p>The camera does not move. We never see the hidden test labels. Anything we emit that is not in the test set <em>hurts</em> Score A, so we only fire classes we can defend from tracks.</p>
+      <div class="flow">
+        <div>.mp4</div><span>→</span>
+        <div>YOLO n</div><span>→</span>
+        <div>ByteTrack</div><span>→</span>
+        <div>rules</div><span>→</span>
+        <div>[t0, t1, class]</div>
+      </div>
+      <div class="split">
+        <div>
+          <h3>Learned</h3>
+          <ul>
+            <li>YOLOv8n, COCO open weights (Ultralytics licence)</li>
+            <li>ByteTrack ids on person / bicycle / car / motorcycle / bus / truck</li>
+            <li>No paid APIs. Weights shipped via <code>weights/download.sh</code> (~6 MB)</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Rule-based</h3>
+          <ul>
+            <li><code>stopped_vehicle</code> — speed ≈ 0 for ≥ 10 s, not inside a jam</li>
+            <li><code>congestion</code> — many vehicles slow together</li>
+            <li><code>wrong_way</code> — velocity opposite the dominant flow</li>
+            <li><code>jaywalking</code> — person on roadway, outside crossing polygon</li>
+            <li><code>near_miss</code> / <code>accident</code> — closing distance / box overlap</li>
+            <li>Part B — min TTC mapped so 0.5 ≈ 5 s (logistic)</li>
+          </ul>
+        </div>
+      </div>
+      <p>Off until the layout is drawn in <code>src/scene.json</code>: red light, stop-line, illegal turn / U-turn, solid-line crossing, fire/smoke, failure to yield, road obstacle. Predicting them blind would add empty classes to the macro average.</p>
+    </section>
+
+    <section id="eda">
+      <h2>EDA of the sample videos</h2>
+      <p>Four unlabeled Drive clips, same camera and angle as the hidden set. Files are multi-GB; they stay local (<code>bash samples/download.sh</code>).</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>What we will measure</th><th>Why it changes the model</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Resolution, fps, duration, day/night</td><td>Stride and imgsz vs the 3× time budget</td></tr>
+            <tr><td>Dominant flow direction</td><td><code>wrong_way</code> without painting lanes</td></tr>
+            <tr><td>Stop line, signal, crossing</td><td>Whether red-light classes are even possible</td></tr>
+            <tr><td>Object counts over time</td><td>Congestion vs isolated stopped car</td></tr>
+            <tr><td>Motion heatmap / tracks</td><td>Roadway polygon for jaywalking</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Probe script: <code>python scripts/eda_probe.py</code> → <code>notebooks/frames/</code>. Annotator: <code>python scripts/annotate.py</code> → <code>my_labels.json</code>.</p>
+      <p class="todo">Preview stills and heatmaps will land here as soon as the first clip finishes downloading.</p>
+    </section>
+
+    <section id="results">
+      <h2>Results on the sample videos</h2>
+      <p>Official metric is macro F1 at tIoU 0.3 / 0.5 / 0.7. Boundaries matter more than extra classes.</p>
+      <p class="todo">After the first <code>run_submission.py</code> pass we will post: annotated clips, one timeline per video, the risk curve, one example of each class we fire, and failure cases (false jams, tracker ID switches).</p>
+    </section>
+
+    <section id="demo">
+      <h2>Live demo</h2>
+      <p>
+        Limits for this page: <strong>.mp4, about 2 minutes, a few hundred MB</strong>.
+        Click an event on the timeline to seek the video.
+        Client-side visualizer works now (video + events JSON).
+        Full model inference: <code>streamlit run demo/app.py</code> or the hosted Space once it is up.
+      </p>
+      <div class="demo-grid">
+        <div>
+          <label>Video</label>
+          <input type="file" id="video" accept="video/mp4,video/*" />
+          <label>Events JSON (optional — or load the example)</label>
+          <input type="file" id="json" accept="application/json" />
+          <div class="row">
+            <button type="button" id="load-example">Load example events</button>
+            <button type="button" id="run">Show timeline</button>
+          </div>
+          <p id="progress" class="progress"></p>
+        </div>
+        <div>
+          <video id="player" controls playsinline></video>
+        </div>
+      </div>
+      <div id="legend" class="legend"></div>
+      <div id="timeline" class="timeline"></div>
+      <pre id="raw" class="raw" hidden></pre>
+    </section>
+
+    <section id="report">
+      <h2>Report</h2>
+      <h3>What worked</h3>
+      <ul>
+        <li>Keeping the official harness untouched and putting our code under <code>src/</code>.</li>
+        <li>Rules that do not need a painted map: stopped car, jam, wrong-way vs median flow, TTC risk.</li>
+        <li>Not emitting geometry classes yet — empty classes in C would drag Score A to 0.</li>
+      </ul>
+      <h3>What did not (yet)</h3>
+      <ul>
+        <li>Sample clips were still downloading at first site publish, so EDA and sample timelines are incomplete.</li>
+        <li>No traffic-light / stop-line detector until we see whether the signal is readable.</li>
+        <li>Browser demo cannot run YOLO; inference is the Streamlit app.</li>
+      </ul>
+      <h3>Next</h3>
+      <ul>
+        <li>Label samples, fill <code>src/scene.json</code>, keep only classes that appear.</li>
+        <li>Calibrate TTC so alarms start in the 10 s window without firing all day.</li>
+        <li>Host Streamlit (or a small GPU box) and point this page at it.</li>
+      </ul>
+    </section>
+
+    <section id="links">
+      <h2>Links</h2>
+      <ul>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv">Repository</a></li>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/predictions_samples.json">predictions_samples.json</a></li>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/weights/download.sh">Weights download</a></li>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/docs/task.md">Task (RU)</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>Westminster International University in Tashkent · Intelligence in Use · team PDPU</footer>
+  <script src="app.js"></script>
+</body>
+</html>
