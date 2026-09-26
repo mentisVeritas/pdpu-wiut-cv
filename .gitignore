@@ -1,0 +1,26 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+
+# large local assets
+samples/*.mp4
+samples/*.MP4
+samples/*.part
+samples/*.mp4*
+weights/*.pt
+weights/*.onnx
+weights/*.engine
+weights/*.pth
+!weights/download.sh
+
+# generated (root only — keep examples/predictions.json)
+/predictions.json
+/report.json
+!examples/predictions.json
+*.log
