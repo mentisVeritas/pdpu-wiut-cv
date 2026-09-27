@@ -3,183 +3,197 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PDPU — Traffic events from a fixed camera</title>
+  <title>PDPU · Traffic events from the WIUT camera</title>
+  <meta name="description" content="Team PDPU, WIUT Hackathon 2026: traffic event detection and accident anticipation from a fixed road camera." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="nav">
-    <a class="brand" href="#top">PDPU · WIUT 2026</a>
+    <a class="brand" href="#top">PDPU <span>·</span> WIUT 2026</a>
     <nav>
-      <a href="#team">Team</a>
-      <a href="#approach">Approach</a>
-      <a href="#eda">EDA</a>
+      <a href="#demo">Live demo</a>
       <a href="#results">Results</a>
-      <a href="#demo">Demo</a>
+      <a href="#eda">EDA</a>
+      <a href="#approach">Approach</a>
       <a href="#report">Report</a>
+      <a href="#team">Team</a>
       <a href="#links">Links</a>
     </nav>
   </header>
 
   <main id="top">
-    <section class="hero">
-      <p class="kicker">WIUT Hackathon 2026 · CV elimination · Toyota</p>
-      <h1>Watch one fixed road camera. Report every event. Raise an alarm before the crash.</h1>
+    <section>
+      <p class="kicker">WIUT Hackathon 2026 · computer vision · team PDPU · ref F863582F</p>
+      <h1>One fixed camera over a Tashkent junction. Every violation as a time segment.</h1>
       <p class="lead">
-        Part A returns <code>[start_sec, end_sec, label]</code> for 14 official classes.
-        Part B returns a causal risk score at every frame: P(accident starts within 5 s).
+        Part A turns a video into <code>[start_sec, end_sec, label]</code> segments. Part B gives a causal risk,
+        frame by frame, that an accident starts within 5 seconds. Detector and tracker are open weights;
+        the scene (roadway, crossings, stop line, traffic light, solid lines) was drawn once by hand and is
+        re-aligned to every clip automatically.
       </p>
-      <p class="meta">Team <strong>PDPU</strong> · ref <strong>F863582F</strong> · deadline 27 Sep 2026, 23:59 Tashkent</p>
+      <div class="stats" id="heroStats"></div>
     </section>
 
-    <section id="team">
-      <h2>Team</h2>
-      <p>Three people, one public repo, one website. Roles below are what each person owns through judging.</p>
-      <div class="cards">
-        <article>
-          <h3>Begzad Kenesbaev</h3>
-          <p class="role">Lead · pipeline, models, submission repo</p>
-          <p>YOLO + ByteTrack, trajectory rules, Part B TTC estimator, harness wiring, reproducibility.</p>
-          <p><a href="https://github.com/mentisVeritas">GitHub</a></p>
-        </article>
-        <article>
-          <h3>Fariza Raxmanova</h3>
-          <p class="role">Data · annotation and EDA</p>
-          <p>Dev labels on sample clips with official start/end conventions, scene polygons, error notes.</p>
-          <p><a href="https://github.com/farizarakhmanova">GitHub</a></p>
-        </article>
-        <article>
-          <h3>mallokodev</h3>
-          <p class="role">Product · website and live demo</p>
-          <p>This site, upload demo, timelines, operator-style presentation of events.</p>
-          <p><a href="https://github.com/httpswap">GitHub</a></p>
-        </article>
+    <section id="demo">
+      <p class="kicker">Live demo</p>
+      <h2>Upload a clip, get the events back</h2>
+      <p class="sub">
+        Accepts an <strong>.mp4 from this camera</strong>; the first <strong>3 minutes</strong> are analysed (about 500 MB max).
+        It runs on a free CPU, so a 2-minute clip takes a few minutes; a progress bar shows the stage.
+        You get the annotated video, a timeline with the traffic-light row, the Part B risk curve and the raw
+        <code>detect_events()</code> output. A 12-second example clip is one click away.
+      </p>
+      <div id="demoMount"></div>
+    </section>
+
+    <section id="results">
+      <p class="kicker">Results on the sample videos</p>
+      <h2>Every sample clip, annotated by our pipeline</h2>
+      <p class="sub">
+        Boxes: tracked objects. Red line: stop line. Magenta: solid lines. Chip top left: the light as read from the lamp colour.
+        Chips at the bottom: events active at that moment. <strong>Click a segment in the timeline to jump to it.</strong>
+        These are exactly the events in <a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/predictions_samples.json">predictions_samples.json</a>.
+      </p>
+      <div class="tabs" role="tablist" id="resultTabs"></div>
+      <div class="player">
+        <video id="resVideo" controls playsinline muted preload="metadata"></video>
+        <div class="card">
+          <dl class="meta-list" id="resMeta"></dl>
+          <h3>Events in this clip</h3>
+          <div id="resCounts" class="legend"></div>
+        </div>
+      </div>
+      <div class="timeline" id="resTimeline"></div>
+      <h3>Part B: risk that an accident starts within 5 s</h3>
+      <div class="card"><div class="chart-box"><canvas id="riskChart"></canvas></div>
+        <p class="note">Causal: each value uses only frames up to that moment. Dashed line: the alarm threshold 0.5.</p></div>
+      <h3>One example of each class we detect</h3>
+      <div class="gallery" id="gallery"></div>
+    </section>
+
+    <section id="eda">
+      <p class="kicker">Exploratory analysis</p>
+      <h2>What the four clips told us, and what it changed</h2>
+      <div class="table-wrap"><table id="edaTable"></table></div>
+      <h3>Findings that shaped the solution</h3>
+      <div class="grid2" id="findings">
+        <div class="card finding"><span class="tag">framing</span><div><b>The clips are not pixel-identical.</b> Against the clip we drew the scene on, the others are shifted by 11–30 px (720p). A fixed polygon would put the stop line in the wrong lane, so every clip's median background is matched to a reference frame (SIFT + RANSAC) and the scene is moved before any rule runs.</div></div>
+        <div class="card finding"><span class="tag">signal</span><div><b>In daylight the lamp is not the brightest thing.</b> The sunlit housing outshines a lit lamp, so brightness read "red" for five minutes straight. Colour works: red lamp R ≫ G, B; green lamp G ≫ R. Measured over complete phases: red 28–39 s, green 32–41 s including the blinking green and amber.</div></div>
+        <div class="card finding"><span class="tag">perspective</span><div><b>Boxes of queued cars overlap all the time.</b> The camera looks down at a steep angle, so neighbours in a queue overlap in the image. Every box-contact "accident" we inspected was a queue. We dropped accident / near-miss from Part A and rebuilt Part B around steady closing on a collision course.</div></div>
+        <div class="card finding"><span class="tag">false people</span><div><b>The detector sees people that are not there.</b> A traffic-light head was tracked as a "person" for 30 s; couriers on bikes count as pedestrians. Static "people" and riders are removed before any pedestrian rule, and regions are tested at the feet, not the box centre.</div></div>
+        <div class="card finding"><span class="tag">two-way road</span><div><b>There is no single main direction.</b> The median splits two opposite flows, so "against the median flow" flagged half of all cars as wrong-way. The flow map below learns the direction per grid cell instead.</div></div>
+        <div class="card finding"><span class="tag">crowds</span><div><b>Pedestrians do not walk inside the paint.</b> In a crowd people step a metre off the zebra. We drew crossings about half a zebra wider on each side and marked refuge islands as places where a pedestrian may stand.</div></div>
+      </div>
+      <div class="tabs" role="tablist" id="edaTabs"></div>
+      <div class="grid2">
+        <div class="card"><h3 style="margin-top:0">Objects on screen per second</h3><div class="chart-box"><canvas id="countChart"></canvas></div></div>
+        <div class="card"><h3 style="margin-top:0">Signal phases (from lamp colour)</h3><div id="signalBar"></div><p class="note" id="signalNote"></p></div>
+      </div>
+      <div class="grid3" style="margin-top:16px">
+        <figure class="card" style="margin:0"><img id="heatV" alt="Heat map of vehicle positions" /><figcaption class="note">Where vehicles drive (feet of tracked boxes)</figcaption></figure>
+        <figure class="card" style="margin:0"><img id="heatP" alt="Heat map of pedestrian positions" /><figcaption class="note">Where pedestrians walk (riders and static false positives removed)</figcaption></figure>
+        <figure class="card" style="margin:0"><img id="flowImg" alt="Dominant driving direction per grid cell" /><figcaption class="note">Dominant direction per cell; colour encodes heading. This map drives the wrong-way rule.</figcaption></figure>
       </div>
     </section>
 
     <section id="approach">
-      <h2>Problem and approach</h2>
-      <p>The camera does not move. We never see the hidden test labels. Anything we emit that is not in the test set <em>hurts</em> Score A, so we only fire classes we can defend from tracks.</p>
-      <div class="flow">
+      <p class="kicker">Problem and approach</p>
+      <h2>Open-weight perception, a hand-drawn scene, and rules that follow the organisers' conventions</h2>
+      <div class="pipeline">
         <div>.mp4</div><span>→</span>
-        <div>YOLO n</div><span>→</span>
-        <div>ByteTrack</div><span>→</span>
-        <div>rules</div><span>→</span>
-        <div>[t0, t1, class]</div>
+        <div>align scene to clip<br><small class="note">SIFT + RANSAC</small></div><span>→</span>
+        <div class="learned">YOLOv8n + ByteTrack<br><small class="note">every 3rd frame, 640 px</small></div><span>→</span>
+        <div>lamp colour → signal timeline</div><span>→</span>
+        <div>rules per class</div><span>→</span>
+        <div>merge fragments</div><span>→</span>
+        <div><code>[t0, t1, label]</code></div>
       </div>
-      <div class="split">
-        <div>
-          <h3>Learned</h3>
+      <div class="grid2">
+        <div class="card">
+          <h3 style="margin-top:0">Learned (open weights, no fine-tuning)</h3>
           <ul>
-            <li>YOLOv8n, COCO open weights (Ultralytics licence)</li>
-            <li>ByteTrack ids on person / bicycle / car / motorcycle / bus / truck</li>
-            <li>No paid APIs. Weights shipped via <code>weights/download.sh</code> (~6 MB)</li>
+            <li>YOLOv8n trained on COCO (Ultralytics, AGPL-3.0): cars, buses, trucks, motorcycles, bicycles, people.</li>
+            <li>ByteTrack for identities across frames.</li>
+            <li>No other training data. No hosted APIs at inference. Weights: 6 MB, shipped in <code>weights/</code>.</li>
           </ul>
         </div>
-        <div>
-          <h3>Rule-based</h3>
+        <div class="card">
+          <h3 style="margin-top:0">Hand-made, drawn once for this camera</h3>
           <ul>
-            <li><code>stopped_vehicle</code> — speed ≈ 0 for ≥ 10 s, not inside a jam</li>
-            <li><code>congestion</code> — many vehicles slow together</li>
-            <li><code>wrong_way</code> — velocity opposite the dominant flow</li>
-            <li><code>jaywalking</code> — person on roadway, outside crossing polygon</li>
-            <li><code>near_miss</code> / <code>accident</code> — closing distance / box overlap</li>
-            <li>Part B — min TTC mapped so 0.5 ≈ 5 s (logistic)</li>
+            <li>Roadway, crossings and refuge islands, the stop line with the light that controls it, solid lane lines. Stored in <code>src/scene.json</code>, drawn on <code>src/scene_ref.jpg</code> with our browser scene editor.</li>
+            <li>Per-clip alignment and the signal reader are classical computer vision, not learned.</li>
           </ul>
         </div>
       </div>
-      <p>Off until the layout is drawn in <code>src/scene.json</code>: red light, stop-line, illegal turn / U-turn, solid-line crossing, fire/smoke, failure to yield, road obstacle. Predicting them blind would add empty classes to the macro average.</p>
-    </section>
-
-    <section id="eda">
-      <h2>EDA of the sample videos</h2>
-      <p>Four unlabeled Drive clips, same camera and angle as the hidden set. Files are multi-GB; they stay local (<code>bash samples/download.sh</code>).</p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>What we will measure</th><th>Why it changes the model</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Resolution, fps, duration, day/night</td><td>Stride and imgsz vs the 3× time budget</td></tr>
-            <tr><td>Dominant flow direction</td><td><code>wrong_way</code> without painting lanes</td></tr>
-            <tr><td>Stop line, signal, crossing</td><td>Whether red-light classes are even possible</td></tr>
-            <tr><td>Object counts over time</td><td>Congestion vs isolated stopped car</td></tr>
-            <tr><td>Motion heatmap / tracks</td><td>Roadway polygon for jaywalking</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p>Probe script: <code>python scripts/eda_probe.py</code> → <code>notebooks/frames/</code>. Annotator: <code>python scripts/annotate.py</code> → <code>my_labels.json</code>.</p>
-      <p class="todo">Preview stills and heatmaps will land here as soon as the first clip finishes downloading.</p>
-    </section>
-
-    <section id="results">
-      <h2>Results on the sample videos</h2>
-      <p>Official metric is macro F1 at tIoU 0.3 / 0.5 / 0.7. Boundaries matter more than extra classes.</p>
-      <p class="todo">After the first <code>run_submission.py</code> pass we will post: annotated clips, one timeline per video, the risk curve, one example of each class we fire, and failure cases (false jams, tracker ID switches).</p>
-    </section>
-
-    <section id="demo">
-      <h2>Live demo</h2>
-      <p>
-        Limits for this page: <strong>.mp4, about 2 minutes, a few hundred MB</strong>.
-        Click an event on the timeline to seek the video.
-        Client-side visualizer works now (video + events JSON).
-        Full model inference: <code>streamlit run demo/app.py</code> or the hosted Space once it is up.
-      </p>
-      <div class="demo-grid">
-        <div>
-          <label>Video</label>
-          <input type="file" id="video" accept="video/mp4,video/*" />
-          <label>Events JSON (optional — or load the example)</label>
-          <input type="file" id="json" accept="application/json" />
-          <div class="row">
-            <button type="button" id="load-example">Load example events</button>
-            <button type="button" id="run">Show timeline</button>
-          </div>
-          <p id="progress" class="progress"></p>
-        </div>
-        <div>
-          <video id="player" controls playsinline></video>
-        </div>
-      </div>
-      <div id="legend" class="legend"></div>
-      <div id="timeline" class="timeline"></div>
-      <pre id="raw" class="raw" hidden></pre>
+      <h3>Rules, one per class</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Class</th><th>Fires when</th><th>Segment</th></tr></thead>
+        <tbody>
+          <tr><td><code>red_light</code></td><td>a vehicle's ground point crosses the stop line towards the junction and drives on while the controlling light reads red</td><td>line crossing → leaves the junction or the frame</td></tr>
+          <tr><td><code>stop_line</code></td><td>a vehicle stops with its front clearly past the stop line on red, without entering the junction</td><td>stops → light turns green</td></tr>
+          <tr><td><code>solid_line_crossing</code></td><td>the ground point changes side of a solid line and stays there</td><td>wheel touches the line → fully in the new lane</td></tr>
+          <tr><td><code>jaywalking</code></td><td>a walking person's feet are on the roadway outside every crossing, and they actually cover ground</td><td>steps onto the road → leaves it</td></tr>
+          <tr><td><code>failure_to_yield</code></td><td>a moving vehicle is inside a crossing with a walking pedestrian close by, ahead of it</td><td>enters the crossing → leaves it</td></tr>
+          <tr><td><code>stopped_vehicle</code></td><td>stationary ≥ 10 s on the roadway, not waiting at the light (did not drive off right after a signal change, not mostly on red)</td><td>stops → moves again</td></tr>
+          <tr><td><code>congestion</code></td><td>≥ 70 % of vehicles crawl for ≥ 8 s and the queue does not clear during ≥ 10 s of green</td><td>queue stops → clears</td></tr>
+          <tr><td><code>wrong_way</code></td><td>≥ 2 s against the dominant direction of the grid cells it drives through</td><td>enters against the flow → leaves it</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Not emitted in Part A: <code>accident</code>, <code>near_miss</code>, <code>illegal_turn</code>, <code>illegal_u_turn</code>, <code>road_obstacle</code>, <code>fire_smoke</code>. A class we predict that is absent from the test set adds a zero to the macro average, so we only fire classes we could verify on the samples.</p>
+      <h3>Part B: accident anticipation</h3>
+      <p class="sub">A light online tracker runs on every 5th frame. A pair of vehicles raises the risk only when their gap shrank on each of the last four updates, their straight-line paths bring the boxes into contact within 1.5 s, and the hazard persists for about 0.7 s. Pairs already overlapping (a queue seen at an angle) are ignored. On the samples the risk stays near 0 and crosses 0.5 on about 2–3 % of frames. <code>step()</code> sees frames in order and nothing else.</p>
+      <h3>Runtime, inside the 3 × duration budget</h3>
+      <div class="table-wrap"><table id="runtimeTable"></table></div>
     </section>
 
     <section id="report">
-      <h2>Report</h2>
-      <h3>What worked</h3>
-      <ul>
-        <li>Keeping the official harness untouched and putting our code under <code>src/</code>.</li>
-        <li>Rules that do not need a painted map: stopped car, jam, wrong-way vs median flow, TTC risk.</li>
-        <li>Not emitting geometry classes yet — empty classes in C would drag Score A to 0.</li>
-      </ul>
-      <h3>What did not (yet)</h3>
-      <ul>
-        <li>Sample clips were still downloading at first site publish, so EDA and sample timelines are incomplete.</li>
-        <li>No traffic-light / stop-line detector until we see whether the signal is readable.</li>
-        <li>Browser demo cannot run YOLO; inference is the Streamlit app.</li>
-      </ul>
-      <h3>Next</h3>
-      <ul>
-        <li>Label samples, fill <code>src/scene.json</code>, keep only classes that appear.</li>
-        <li>Calibrate TTC so alarms start in the 10 s window without firing all day.</li>
-        <li>Host Streamlit (or a small GPU box) and point this page at it.</li>
-      </ul>
+      <p class="kicker">Report</p>
+      <h2>What worked, what did not, what is next</h2>
+      <div class="grid3">
+        <div class="card"><h3 style="margin-top:0">Worked</h3><ul>
+          <li>Drawing the scene once and aligning it per clip: the stop line lands on the right lanes in all four clips.</li>
+          <li>Reading the light by lamp colour: clean red/green cycles in day and evening clips.</li>
+          <li>Red-light running: on sample_001 it caught a car passing a stopped queue in the kerb lane on red while pedestrians crossed.</li>
+          <li>Removing false people (signal heads, riders) before pedestrian rules.</li>
+        </ul></div>
+        <div class="card"><h3 style="margin-top:0">Did not</h3><ul>
+          <li>Box-overlap accident and near-miss rules: dozens of hits per clip, all queues or cars in neighbouring lanes. Removed from Part A.</li>
+          <li>The first Part B scored ≈ 1.0 on most frames. Rebuilt; still unvalidated against real accidents, because the samples contain none we could find.</li>
+          <li><code>failure_to_yield</code> is the noisiest class left: cyclists and pedestrians who cross on red trigger it.</li>
+          <li>No own labels for a full scored dev set before the deadline; boundaries are checked by eye.</li>
+        </ul></div>
+        <div class="card"><h3 style="margin-top:0">Next</h3><ul>
+          <li>Label all four clips and tune thresholds per class against <code>evaluate.py</code>.</li>
+          <li>A pedestrian-signal reader, so crossing on red is no longer a car's fault.</li>
+          <li>Ground-plane homography from the lane markings: speeds and gaps in metres instead of pixels, which Part B needs most.</li>
+          <li>Fine-tune the detector on frames from this camera to remove the false "people".</li>
+        </ul></div>
+      </div>
+    </section>
+
+    <section id="team">
+      <p class="kicker">Team</p>
+      <h2>Team PDPU</h2>
+      <div class="people" id="people"></div>
     </section>
 
     <section id="links">
-      <h2>Links</h2>
+      <p class="kicker">Links</p>
+      <h2>Code, weights, outputs</h2>
       <ul>
-        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv">Repository</a></li>
-        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/predictions_samples.json">predictions_samples.json</a></li>
-        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/weights/download.sh">Weights download</a></li>
-        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/docs/task.md">Task (RU)</a></li>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv">Repository</a>: <code>pip install -r requirements.txt</code>, then <code>python run_submission.py --videos /data/test --out predictions.json</code></li>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/predictions_samples.json">predictions_samples.json</a>: our output on the four sample clips</li>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/tree/main/weights">Weights</a>: YOLOv8n, 6 MB, in the repository (<code>weights/download.sh</code> re-fetches it)</li>
+        <li><a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/src/scene.json">Scene layout</a> and <a href="https://github.com/mentisVeritas/pdpu-wiut-cv/blob/main/src/scene_ref.jpg">its reference frame</a></li>
+        <li id="demoLink"></li>
       </ul>
     </section>
   </main>
 
-  <footer>Westminster International University in Tashkent · Intelligence in Use · team PDPU</footer>
+  <footer>Westminster International University in Tashkent · WIUT Hackathon 2026 · team PDPU</footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

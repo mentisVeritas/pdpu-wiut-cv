@@ -34,9 +34,20 @@ GROUPS = {0: "person", 1: "bicycle", 2: "car", 3: "motorcycle", 5: "bus", 7: "tr
 
 
 def phase_stats(runs: list[list], duration: float) -> dict:
+    """Mean length of complete phases. Green lasts from its first green sample to
+    the next red; a single noisy sample or the blinking end does not split it."""
+    phases: list[list] = []
+    for s, e, st in runs:
+        kind = "R" if st == "R" else ("G" if st == "G" or (phases and phases[-1][2] == "G") else None)
+        if kind is None:
+            continue
+        if phases and phases[-1][2] == kind:
+            phases[-1][1] = e
+        else:
+            phases.append([s, e, kind])
     out = {}
     for state in ("R", "G"):
-        full = [e - s for s, e, st in runs if st == state and s > 1.0 and e < duration - 1.0]
+        full = [e - s for s, e, st in phases[1:-1] if st == state]
         out[state] = round(float(np.mean(full)), 1) if full else None
     return out
 
@@ -131,6 +142,7 @@ def main() -> int:
             "duration": round(meta["duration"], 2),
             "brightness": int(bg.mean()),
             "align": info["align"],
+            "runtime": pred.get("log", {}).get(video.name),
             "tracks_by_class": dict(by_class),
             "pedestrians_on_foot": len(peds),
             "peak_vehicles": int(max((sum(counts[g][s] for g in ("car", "bus", "truck", "motorcycle"))

@@ -31,3 +31,4 @@ weights/*.pth
 *.log
 my_labels.json
 notebooks/frames/
+build/

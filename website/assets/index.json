@@ -1,0 +1,234 @@
+{
+ "videos": [
+  {
+   "video": "sample_001.mp4",
+   "width": 3840,
+   "height": 2160,
+   "fps": 29.97,
+   "duration": 340.34,
+   "brightness": 95,
+   "align": {
+    "aligned": true,
+    "scale": 0.9868,
+    "shift_px": [
+     11.1,
+     -13.8
+    ]
+   },
+   "runtime": {
+    "duration": 340.34,
+    "budget_sec": 1021.0,
+    "errors": [],
+    "part_a_sec": 152.1,
+    "part_b_sec": 148.2,
+    "total_sec": 300.3
+   },
+   "tracks_by_class": {
+    "car": 676,
+    "person": 371,
+    "truck": 31,
+    "bus": 53,
+    "motorcycle": 1
+   },
+   "pedestrians_on_foot": 269,
+   "peak_vehicles": 36,
+   "signal_mean_sec": {
+    "L1": {
+     "R": 35.9,
+     "G": 39.0
+    }
+   },
+   "events_by_class": {
+    "failure_to_yield": 3,
+    "jaywalking": 3,
+    "red_light": 2,
+    "solid_line_crossing": 5,
+    "stopped_vehicle": 1,
+    "wrong_way": 2
+   }
+  },
+  {
+   "video": "sample_002.mp4",
+   "width": 3840,
+   "height": 2160,
+   "fps": 29.97,
+   "duration": 317.82,
+   "brightness": 95,
+   "align": {
+    "aligned": true,
+    "scale": 0.9866,
+    "shift_px": [
+     11.3,
+     -13.8
+    ]
+   },
+   "runtime": {
+    "duration": 317.82,
+    "budget_sec": 953.5,
+    "errors": [],
+    "part_a_sec": 136.0,
+    "part_b_sec": 146.4,
+    "total_sec": 282.4
+   },
+   "tracks_by_class": {
+    "car": 555,
+    "person": 480,
+    "bus": 29,
+    "truck": 37,
+    "motorcycle": 5
+   },
+   "pedestrians_on_foot": 334,
+   "peak_vehicles": 29,
+   "signal_mean_sec": {
+    "L1": {
+     "R": 35.9,
+     "G": 38.9
+    }
+   },
+   "events_by_class": {
+    "failure_to_yield": 12,
+    "jaywalking": 11,
+    "red_light": 2,
+    "solid_line_crossing": 4,
+    "stop_line": 2,
+    "wrong_way": 3
+   }
+  },
+  {
+   "video": "sample_003.mp4",
+   "width": 3840,
+   "height": 2160,
+   "fps": 29.97,
+   "duration": 317.82,
+   "brightness": 63,
+   "align": {
+    "aligned": true,
+    "scale": 0.9997,
+    "shift_px": [
+     -29.8,
+     10.2
+    ]
+   },
+   "runtime": {
+    "duration": 317.82,
+    "budget_sec": 953.5,
+    "errors": [],
+    "part_a_sec": 159.6,
+    "part_b_sec": 147.0,
+    "total_sec": 306.6
+   },
+   "tracks_by_class": {
+    "car": 716,
+    "bus": 65,
+    "person": 499,
+    "truck": 37,
+    "motorcycle": 6,
+    "bicycle": 3
+   },
+   "pedestrians_on_foot": 359,
+   "peak_vehicles": 34,
+   "signal_mean_sec": {
+    "L1": {
+     "R": 27.8,
+     "G": 32.1
+    }
+   },
+   "events_by_class": {
+    "failure_to_yield": 18,
+    "jaywalking": 8,
+    "solid_line_crossing": 2,
+    "wrong_way": 1
+   }
+  },
+  {
+   "video": "sample_004.mp4",
+   "width": 3840,
+   "height": 2160,
+   "fps": 29.97,
+   "duration": 127.63,
+   "brightness": 38,
+   "align": {
+    "aligned": true,
+    "scale": 1.0,
+    "shift_px": [
+     0.0,
+     0.0
+    ]
+   },
+   "runtime": {
+    "duration": 127.63,
+    "budget_sec": 382.9,
+    "errors": [],
+    "part_a_sec": 57.5,
+    "part_b_sec": 54.4,
+    "total_sec": 111.9
+   },
+   "tracks_by_class": {
+    "car": 281,
+    "person": 228,
+    "truck": 36,
+    "bus": 25,
+    "motorcycle": 2,
+    "bicycle": 2
+   },
+   "pedestrians_on_foot": 160,
+   "peak_vehicles": 33,
+   "signal_mean_sec": {
+    "L1": {
+     "R": 38.8,
+     "G": 40.9
+    }
+   },
+   "events_by_class": {
+    "failure_to_yield": 11,
+    "jaywalking": 5,
+    "solid_line_crossing": 4,
+    "stop_line": 1
+   }
+  }
+ ],
+ "examples": {
+  "wrong_way": {
+   "video": "sample_001",
+   "t": 9.4,
+   "start": 6.61,
+   "end": 13.61
+  },
+  "stopped_vehicle": {
+   "video": "sample_001",
+   "t": 34.6,
+   "start": 27.73,
+   "end": 44.74
+  },
+  "red_light": {
+   "video": "sample_001",
+   "t": 82.0,
+   "start": 78.78,
+   "end": 86.78
+  },
+  "jaywalking": {
+   "video": "sample_001",
+   "t": 96.9,
+   "start": 96.1,
+   "end": 98.0
+  },
+  "solid_line_crossing": {
+   "video": "sample_001",
+   "t": 125.3,
+   "start": 124.42,
+   "end": 126.43
+  },
+  "failure_to_yield": {
+   "video": "sample_001",
+   "t": 157.6,
+   "start": 156.46,
+   "end": 159.16
+  },
+  "stop_line": {
+   "video": "sample_002",
+   "t": 60.5,
+   "start": 58.66,
+   "end": 63.26
+  }
+ }
+}

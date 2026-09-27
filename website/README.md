@@ -1,20 +1,11 @@
 # Team website
 
-Static site for GitHub Pages (workflow deploys the `website/` folder).
+Static site served by GitHub Pages from this folder (`.github/workflows/pages.yml`).
 
-```bash
-python3 -m http.server 8080 --directory website
-```
+- `index.html`, `styles.css`, `app.js`: the page; everything data-driven is read from `assets/`.
+- `assets/`: built from the real pipeline output by
+  `python scripts/build_site_assets.py --videos samples --preview samples/h264 --pred predictions_samples.json --out website/assets`
+  (annotated clips, per-clip JSON with events / signal / counts / risk, heat maps, flow maps, one still per class).
+- Live demo: the Hugging Face Space built by `scripts/pack_space.py`; set `DEMO_URL` in `app.js`.
 
-Live demo on this page: upload a video + events JSON, or click **Load example events**, then click a bar to seek.
-
-Model inference (CPU ok):
-
-```bash
-pip install -r demo/requirements.txt
-streamlit run demo/app.py
-```
-
-After Pages is enabled the public URL is:
-
-`https://mentisveritas.github.io/pdpu-wiut-cv/`
+Local preview: `python3 -m http.server 8080 --directory website`
