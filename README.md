@@ -94,9 +94,10 @@ See `TEAM.md` for who does what this weekend.
 
 ## Website and demo
 
-- Site (GitHub Pages): https://mentisveritas.github.io/pdpu-wiut-cv/
-- Local site: `python3 -m http.server 8080 --directory website`
-- Model demo: `pip install -r demo/requirements.txt && streamlit run demo/app.py`
+- Site (GitHub Pages): https://mentisveritas.github.io/pdpu-wiut-cv/ — built from `website/`; its data comes from
+  `python scripts/build_site_assets.py --videos samples --preview samples/h264 --pred predictions_samples.json --out website/assets`
+- Live demo (Gradio): `pip install -r demo/requirements.txt && python demo/app.py`; the hosted Hugging Face Space is assembled by `python scripts/pack_space.py`
+- Smoke test without the multi-GB samples: `python run_submission.py --videos tests/fixtures --out /tmp/p.json`
 
 ## Docs
 
