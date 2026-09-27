@@ -1,109 +1,112 @@
-"""Causal Part B: TTC from a light on-the-fly tracker. No video file, no Part A."""
+"""Causal Part B: are two tracked vehicles on a collision course?
+
+step() sees the frames in order and nothing else: no video file, no Part A.
+A pair raises the risk only when their straight-line paths bring the boxes into
+contact within the horizon and they close fast. Pairs whose boxes already
+overlap (queued cars seen at this oblique angle) and passes that clear each
+other are ignored, and a hazard must persist for about half a second.
+"""
 
 from __future__ import annotations
 
+import math
+from collections import deque
+
 import numpy as np
 
-from .config import RISK_STRIDE, TTC_ALARM_SEC
+from .config import RISK_HORIZON_SEC, RISK_STRIDE
 from .model import VEHICLE_COCO, get_model, infer_device
 
+CAR_LIKE = sorted(VEHICLE_COCO - {1})  # bicycles are too small to track reliably at 640 px
 
-class _SimpleTrack:
-    def __init__(self, tid: int, cx: float, cy: float, t: float, w: float):
-        self.tid = tid
-        self.cx = cx
-        self.cy = cy
-        self.t = t
-        self.w = w
-        self.vx = 0.0
-        self.vy = 0.0
+
+class _Track:
+    def __init__(self, tid: int, cx: float, cy: float, w: float, t: float):
+        self.tid, self.cx, self.cy, self.w, self.t = tid, cx, cy, w, t
+        self.vx = self.vy = 0.0
+        self.age = 0
 
 
 class CausalRiskEstimator:
     def reset(self, meta: dict) -> None:
-        self.meta = meta
-        self.last_score = 0.0
+        self.height = float(meta.get("height") or 1080)
         self.i = 0
-        self.tracks: dict[int, _SimpleTrack] = {}
+        self.last_score = 0.0
+        self.tracks: dict[int, _Track] = {}
         self._next_id = 1
+        self.recent: deque[float] = deque(maxlen=4)
+        self.gaps: dict[tuple[int, int], deque] = {}
 
     def step(self, frame: np.ndarray, t_sec: float) -> float:
-        if self.i % max(1, RISK_STRIDE) != 0:
+        if self.i % max(1, RISK_STRIDE):
             self.i += 1
             return self.last_score
         self.i += 1
         self._update(frame, t_sec)
-        self.last_score = self._score()
+        self.recent.append(self._hazard())
+        self.last_score = float(min(self.recent))
         return self.last_score
 
     def _update(self, frame: np.ndarray, t: float) -> None:
-        model = get_model()
-        result = model.predict(
-            frame,
-            verbose=False,
-            imgsz=640,
-            conf=0.3,
-            classes=list(VEHICLE_COCO),
-            device=infer_device(),
-        )[0]
+        result = get_model().predict(frame, verbose=False, imgsz=640, conf=0.3, classes=CAR_LIKE,
+                                     device=infer_device())[0]
         dets = []
         if result.boxes is not None:
-            for box in result.boxes.xyxy.cpu().tolist():
-                x1, y1, x2, y2 = box
+            for x1, y1, x2, y2 in result.boxes.xyxy.cpu().tolist():
                 dets.append((0.5 * (x1 + x2), 0.5 * (y1 + y2), max(4.0, x2 - x1)))
-        assigned: set[int] = set()
-        used_det: set[int] = set()
-        for di, (cx, cy, w) in enumerate(dets):
-            best_id, best_d = None, 1e9
+        taken: set[int] = set()
+        for cx, cy, w in sorted(dets, key=lambda d: -d[2]):
+            best, best_d = None, 1e9
             for tid, tr in self.tracks.items():
-                if tid in assigned:
-                    continue
-                d = float(np.hypot(cx - tr.cx, cy - tr.cy))
-                if d < best_d and d < 1.8 * max(w, tr.w):
-                    best_d, best_id = d, tid
-            if best_id is None:
+                d = math.hypot(cx - tr.cx, cy - tr.cy)
+                if tid not in taken and d < best_d and d < 0.8 * max(w, tr.w):
+                    best, best_d = tid, d
+            if best is None:
+                self.tracks[self._next_id] = _Track(self._next_id, cx, cy, w, t)
+                taken.add(self._next_id)
+                self._next_id += 1
                 continue
-            tr = self.tracks[best_id]
+            tr = self.tracks[best]
             dt = max(1e-3, t - tr.t)
-            tr.vx = (cx - tr.cx) / dt
-            tr.vy = (cy - tr.cy) / dt
-            tr.cx, tr.cy, tr.t, tr.w = cx, cy, t, w
-            assigned.add(best_id)
-            used_det.add(di)
-        for di, (cx, cy, w) in enumerate(dets):
-            if di in used_det:
-                continue
-            self.tracks[self._next_id] = _SimpleTrack(self._next_id, cx, cy, t, w)
-            self._next_id += 1
-        stale = [tid for tid, tr in self.tracks.items() if t - tr.t > 1.5]
-        for tid in stale:
+            tr.vx = 0.5 * tr.vx + 0.5 * (cx - tr.cx) / dt
+            tr.vy = 0.5 * tr.vy + 0.5 * (cy - tr.cy) / dt
+            tr.cx, tr.cy, tr.w, tr.t = cx, cy, w, t
+            tr.age += 1
+            taken.add(best)
+        for tid in [tid for tid, tr in self.tracks.items() if t - tr.t > 1.0]:
             del self.tracks[tid]
 
-    def _score(self) -> float:
-        items = list(self.tracks.values())
-        if len(items) < 2:
-            return 0.0
-        min_ttc = 1e9
+    def _hazard(self) -> float:
+        fast = 0.03 * self.height
+        items = [tr for tr in self.tracks.values() if tr.age >= 2]
+        live = {tr.tid for tr in items}
+        self.gaps = {k: v for k, v in self.gaps.items() if k[0] in live and k[1] in live}
+        worst = 0.0
         for i in range(len(items)):
-            for j in range(i + 1, len(items)):
-                a, b = items[i], items[j]
-                dx, dy = a.cx - b.cx, a.cy - b.cy
-                dist = float(np.hypot(dx, dy))
-                rvx, rvy = a.vx - b.vx, a.vy - b.vy
-                closing = -(dx * rvx + dy * rvy)
-                rel2 = rvx * rvx + rvy * rvy
-                if closing <= 0 or rel2 < 1e-6:
+            a = items[i]
+            for b in items[i + 1:]:
+                avg_w = 0.5 * (a.w + b.w)
+                px, py = b.cx - a.cx, b.cy - a.cy
+                gap = math.hypot(px, py)
+                key = (a.tid, b.tid) if a.tid < b.tid else (b.tid, a.tid)
+                hist = self.gaps.setdefault(key, deque(maxlen=4))
+                hist.append(gap)
+                if gap < 0.6 * avg_w or gap > 4.0 * avg_w:
                     continue
-                ttc = max(0.0, closing / rel2)  # -dot(p, v) / ||v||^2
-                if 0.0 < ttc < min_ttc:
-                    min_ttc = ttc
-        if min_ttc >= 1e8:
-            return 0.0
-        # logistic: 0.5 when TTC == horizon (5 s)
-        k = 1.2
-        score = 1.0 / (1.0 + np.exp((min_ttc - TTC_ALARM_SEC) / k))
-        return float(min(1.0, max(0.0, score)))
-
-
-# harness-facing name lives in solution.py; this is the implementation
-RiskEstimator = CausalRiskEstimator
+                # closing steadily over the last updates, not a one-frame jitter
+                if len(hist) < 4 or any(later >= earlier for earlier, later in zip(hist, list(hist)[1:])) \
+                        or hist[0] - hist[-1] < 0.3 * avg_w:
+                    continue
+                if max(math.hypot(a.vx, a.vy), math.hypot(b.vx, b.vy)) < fast:
+                    continue
+                vx, vy = b.vx - a.vx, b.vy - a.vy
+                rel2 = vx * vx + vy * vy
+                if rel2 < fast * fast:
+                    continue
+                t_star = -(px * vx + py * vy) / rel2
+                if not 0.0 < t_star <= RISK_HORIZON_SEC:
+                    continue
+                if math.hypot(px + vx * t_star, py + vy * t_star) > 0.3 * avg_w:
+                    continue
+                worst = max(worst, 1.0 / (1.0 + math.exp((t_star - 1.5) / 0.4)))
+        return worst

@@ -238,7 +238,7 @@ def rule_red_light_and_stop_line(vehicles: list[Track], ctx: Ctx) -> list[list]:
 
 def _stop_line_event(tr: Track, i: int, proj: list, lt: LightTimeline, ctx: Ctx) -> list | None:
     obs = tr.obs[i:]
-    mask = [speed_at(tr, o.t) < ctx.stop_speed and 0 < p[1] < (o.y2 - o.y1) and lt.state_at(o.t) == "R"
+    mask = [speed_at(tr, o.t) < ctx.stop_speed and 0.25 * (o.y2 - o.y1) < p[1] < (o.y2 - o.y1) and lt.state_at(o.t) == "R"
             for o, p in zip(obs, proj[i:])]
     for start, end in _runs(mask, [o.t for o in obs]):
         if end - start >= 1.5:
@@ -290,15 +290,19 @@ def rule_solid_line_crossing(vehicles: list[Track], ctx: Ctx) -> list[list]:
 
 # ------------------------------------------------------------ direction
 
-def rule_wrong_way(vehicles: list[Track], ctx: Ctx, grid: tuple[int, int] = (24, 14)) -> list[list]:
-    """Against the locally dominant direction. A single global 'main flow' is
-    meaningless on a two-way road, so the direction is learned per grid cell."""
-    w, h = ctx.scene.width, ctx.scene.height
-    gx, gy = grid
+FLOW_GRID = (24, 14)
 
-    def cell(p: tuple[float, float]) -> tuple[int, int]:
-        return min(gx - 1, max(0, int(p[0] / w * gx))), min(gy - 1, max(0, int(p[1] / h * gy)))
 
+def flow_cell(p: tuple[float, float], ctx: Ctx) -> tuple[int, int]:
+    gx, gy = FLOW_GRID
+    return (min(gx - 1, max(0, int(p[0] / ctx.scene.width * gx))),
+            min(gy - 1, max(0, int(p[1] / ctx.scene.height * gy))))
+
+
+def flow_field(vehicles: list[Track], ctx: Ctx) -> dict[tuple[int, int], np.ndarray]:
+    """Dominant driving direction (unit vector) per grid cell, where at least
+    four different vehicles agree. A single global 'main flow' is meaningless
+    on a two-way road."""
     acc: dict[tuple[int, int], list] = defaultdict(list)
     owners: dict[tuple[int, int], set] = defaultdict(set)
     for tr in vehicles:
@@ -306,7 +310,7 @@ def rule_wrong_way(vehicles: list[Track], ctx: Ctx, grid: tuple[int, int] = (24,
             vx, vy = velocity(tr, o.t, 1.0)
             sp = math.hypot(vx, vy)
             if sp >= ctx.move_speed:
-                c = cell(o.foot)
+                c = flow_cell(o.foot, ctx)
                 acc[c].append((vx / sp, vy / sp))
                 owners[c].add(tr.tid)
     flow = {}
@@ -317,14 +321,19 @@ def rule_wrong_way(vehicles: list[Track], ctx: Ctx, grid: tuple[int, int] = (24,
         r = float(np.hypot(*m))
         if r >= 0.6:
             flow[c] = m / r
+    return flow
 
+
+def rule_wrong_way(vehicles: list[Track], ctx: Ctx) -> list[list]:
+    """At least 2 s against the dominant direction of the cells it drives through."""
+    flow = flow_field(vehicles, ctx)
     events = []
     for tr in vehicles:
         mask = []
         for o in tr.obs:
             vx, vy = velocity(tr, o.t, 1.5)
             sp = math.hypot(vx, vy)
-            f = flow.get(cell(o.foot))
+            f = flow.get(flow_cell(o.foot, ctx))
             mask.append(f is not None and sp >= ctx.move_speed and (vx * f[0] + vy * f[1]) / sp < -0.5
                         and ctx.scene.on_road(o.foot))
         for start, end in _runs(mask, _times(tr)):

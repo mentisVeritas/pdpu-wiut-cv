@@ -68,6 +68,16 @@ class LightTimeline:
             elif self.states[i] == "?" and nxt is not None:
                 self.states[i] = "R"
 
+    def runs(self) -> list[list]:
+        """[[start, end, state], ...] with consecutive equal states merged."""
+        out: list[list] = []
+        for t, s in zip(self.times, self.states):
+            if out and out[-1][2] == s:
+                out[-1][1] = round(t, 2)
+            else:
+                out.append([round(t, 2), round(t, 2), s])
+        return out
+
     def state_at(self, t: float) -> str:
         if not self.times:
             return "?"
