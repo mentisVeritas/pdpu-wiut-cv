@@ -30,9 +30,8 @@ DETECT_STRIDE = 3
 MIN_EVENT_SEC = 0.5
 MERGE_GAP_SEC = 1.0
 
-# Stopped-vehicle rule
+# Stopped-vehicle rule (the organisers' definition: stationary for 10 s or more)
 STOPPED_SEC = 10.0
-STOPPED_SPEED_PX = 2.0
 
 # Part B
 RISK_HORIZON_SEC = 5.0

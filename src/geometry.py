@@ -1,11 +1,18 @@
-"""Scene layout helpers. Coordinates in scene.json are normalized to [0, 1]."""
+"""Scene layout. scene.json holds normalized [0, 1] points drawn on scene_ref.jpg;
+scene_align moves them into each video's frame before they reach the rules."""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 _SCENE_PATH = Path(__file__).with_name("scene.json")
+
+Point = tuple[float, float]
+Poly = list[Point]
 
 
 def load_scene() -> dict:
@@ -14,11 +21,7 @@ def load_scene() -> dict:
     return data
 
 
-def _to_px(poly: list[list[float]], width: int, height: int) -> list[tuple[float, float]]:
-    return [(p[0] * width, p[1] * height) for p in poly]
-
-
-def point_in_poly(x: float, y: float, poly: list[tuple[float, float]]) -> bool:
+def point_in_poly(x: float, y: float, poly: Poly) -> bool:
     if len(poly) < 3:
         return False
     inside = False
@@ -31,17 +34,75 @@ def point_in_poly(x: float, y: float, poly: list[tuple[float, float]]) -> bool:
     return inside
 
 
-def scene_polys(scene: dict, width: int, height: int) -> dict:
-    crossings = scene.get("crossings") or []
-    if not crossings and scene.get("crossing"):
-        crossings = [scene["crossing"]]
-    return {
-        "roadway": _to_px(scene.get("roadway") or [], width, height),
-        "crossings": [_to_px(p, width, height) for p in crossings if p],
-        "crossing": _to_px(scene.get("crossing") or [], width, height),
-        "stop_line": _to_px(scene.get("stop_line") or [], width, height),
-    }
+def in_any(x: float, y: float, polys: list[Poly]) -> int:
+    """Index of the first polygon containing (x, y), or -1."""
+    for i, poly in enumerate(polys):
+        if point_in_poly(x, y, poly):
+            return i
+    return -1
 
 
-def on_any_crossing(x: float, y: float, crossings: list[list[tuple[float, float]]]) -> bool:
-    return any(point_in_poly(x, y, poly) for poly in crossings if len(poly) >= 3)
+@dataclass
+class Line:
+    """Directed segment a->b with a unit normal pointing to its 'past' side."""
+
+    a: np.ndarray
+    b: np.ndarray
+    normal: np.ndarray
+
+    @classmethod
+    def from_points(cls, a: Point, b: Point, before: Point | None = None) -> "Line":
+        a_, b_ = np.asarray(a, float), np.asarray(b, float)
+        d = b_ - a_
+        n = np.array([-d[1], d[0]]) / (np.linalg.norm(d) + 1e-9)
+        if before is not None and float(np.dot(np.asarray(before, float) - a_, n)) > 0:
+            n = -n
+        return cls(a_, b_, n)
+
+    def project(self, p: Point) -> tuple[float, float]:
+        """(position along a->b in [0, 1] when beside the segment, signed distance in px)."""
+        d = self.b - self.a
+        v = np.asarray(p, float) - self.a
+        t = float(np.dot(v, d) / (np.dot(d, d) + 1e-9))
+        return t, float(np.dot(v, self.normal))
+
+
+@dataclass
+class StopLine:
+    line: Line
+    light: str | None
+
+
+@dataclass
+class ScenePx:
+    width: int
+    height: int
+    roadways: list[Poly] = field(default_factory=list)
+    crossings: list[Poly] = field(default_factory=list)
+    stop_lines: list[StopLine] = field(default_factory=list)
+    solid_lines: list[list[Line]] = field(default_factory=list)
+
+    def on_road(self, p: Point) -> bool:
+        return in_any(p[0], p[1], self.roadways) >= 0
+
+    def crossing_at(self, p: Point) -> int:
+        return in_any(p[0], p[1], self.crossings)
+
+
+def scene_px(scene: dict, width: int, height: int) -> ScenePx:
+    def px(points: list) -> list[Point]:
+        return [(float(x) * width, float(y) * height) for x, y in points]
+
+    out = ScenePx(width, height)
+    out.roadways = [px(s["points"]) for s in scene.get("roadways", []) if len(s.get("points", [])) >= 3]
+    out.crossings = [px(s["points"]) for s in scene.get("crossings", []) if len(s.get("points", [])) >= 3]
+    for s in scene.get("stop_lines", []):
+        pts = px(s.get("points", []))
+        if len(pts) == 3:
+            out.stop_lines.append(StopLine(Line.from_points(pts[0], pts[1], before=pts[2]), s.get("light")))
+    for s in scene.get("solid_lines", []):
+        pts = px(s.get("points", []))
+        segs = [Line.from_points(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
+        if segs:
+            out.solid_lines.append(segs)
+    return out
