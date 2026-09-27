@@ -14,6 +14,10 @@ samples/*.MP4
 samples/*.part
 samples/*.mp4*
 samples/_clip*.mp4
+samples/h264/
+.label-studio-venv/
+.label-studio-data/
+.label-studio-config.xml
 weights/*.pt
 weights/*.onnx
 weights/*.engine
